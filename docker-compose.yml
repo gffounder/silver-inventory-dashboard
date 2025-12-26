@@ -1,1 +1,56 @@
-   .env   sql/     001_schema.sql     002_seed_metrics.sql   ingest/     requirements.txt     common/       db.py       http.py       parsing.py       config.py     jobs/       cme_comex_silver_stocks.py       stooq_si_f.py       lbma_london_vault_data.py       cftc_cot_comex_silver.py       derive_signals.py       email_digest.py     run_all.py   grafana/     provisioning/       datasources/datasource.yml       dashboards/dashboard.yml     dashboards/       silver_inventory_dashboard.json
+services:
+  postgres:
+    image: postgres:16
+    container_name: silver_pg
+    environment:
+      POSTGRES_DB: ${PGDATABASE}
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: silver_grafana
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafanadata:/var/lib/grafana
+
+  ingest:
+    build:
+      context: ./ingest
+    container_name: silver_ingest
+    depends_on:
+      - postgres
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+
+      # Email digest (optional)
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      EMAIL_FROM: ${EMAIL_FROM}
+      EMAIL_TO: ${EMAIL_TO}
+
+      # Job schedule (local machine)
+      TZ: "America/Detroit"
+      RUN_ON_START: "true"        # run once when container starts
+      DAILY_AT: "18:30"           # 6:30pm ET
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  grafanadata:
